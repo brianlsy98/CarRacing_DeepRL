@@ -1,0 +1,55 @@
+
+############## Trials ################
+Trial 1 :
+1. hidden layer dim = (64, 64)
+2. obs_dim28 -> i in range(26)
+3. input_velocity = 1.5
+
+    ---> result : minVel exceed time limit.. also succeed only randomly
+
+
+
+Trial 2 change :   
+1. hidden layer dim = (128, 64, 32)
+2. obs_dim28 -> i in range(251)
+3. input_velocity = 1.5 ~ 3.0 w.r.t input_steering
+
+
+
+Trial 3 change:     ****** current
+1. reward :
+    - reward += cur_pos.position - prv_pos.position
+    - if crash : reward -= 500
+2. obs -> mean : 4i + 80 -> 5i + 10 (217 obs dim)
+
+
+
+Trial 4 change:
+1. vel -> maxVel
+2. obs -> np.clip to if inf -> 10   # print시 문제는 x
+
+
+######################################
+
+
+
+
+
+############ Saved Model #############
+trial_1 : minVel로 학습, hidden dim = (64, 64), obsdim = 28
+    ------> Exceed time limit 뜬다. + 가끔 주행완료
+
+trial_2 : minVel ~ maxVel로 학습, hidden_dim = (128, 64, 32), obsdim = 217, reward += input_velocity, reward -= 500 when crash
+    ------> Map 1   ****** current
+
+trial_3 : maxVel로 학습, hidden_dim = (128, 64, 32), obsdim = 217, obs clip method change, reward -= 500 when crash
+
+
+
+######################################
+
+
+
+
+
+
