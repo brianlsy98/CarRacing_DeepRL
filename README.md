@@ -6,4 +6,4 @@ GOTOMARS_project2.py : Behavioral Cloning (Additionally tried DQN & PPO and foun
 GOTOMARS_project3.py : Proximal Policy Optimization (PPO)\
 GOTOMARS_real.py : implementation on real RC Car (Algorithm is same with GOTOMARS_project3.py)
 
-* full yaml files and etc files are not available public.
+***full yaml files and etc files are not available public.***
