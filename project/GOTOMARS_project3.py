@@ -1,6 +1,7 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 from __future__ import print_function
 
+# Change python2 to python3 above if you want to use PyTorch!
 
 ##### add python path #####
 import sys
@@ -17,34 +18,30 @@ import gym
 import env
 import numpy as np
 from collections import deque
-import json
 import random
 import math
 import yaml
 import time
 from sim2real.msg import Result, Query
-from joblib import dump, load
 
 
-# please use sklearn for gaussian process regression
-# please use tensorflow-v1 for implementing deep learning architecture (1.9.0 or 1.14.0 version is recommended)
-# torch and different version tensorflow are not allowed.
-from sklearn.utils import shuffle
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
-import tensorflow as tf
-print(tf.__version__) # the version should be 1.14.0 if tensorflow is not installed, try sudo pip2 install tensorflow==1.14.0
+from ppo_torch import Agent
+from utils import plot_learning_curve
+
+import torch
 
 
 project_path = rospkg.RosPack().get_path("sim2real")
-yaml_file = project_path + "/config/eval.yaml"
+yaml_file = project_path + "/config/eval3.yaml"
 
-TEAM_NAME = "RLLAB"
+######################################## PLEASE CHANGE TEAM NAME ########################################
+TEAM_NAME = "GOTOMARS"
+######################################## PLEASE CHANGE TEAM NAME ########################################
 team_path = project_path + "/project/IS_" + TEAM_NAME
 
-class Agent:
+class RunProject_3:
     def __init__(self, args):
-        rospy.init_node('agent_' + TEAM_NAME, anonymous=True, disable_signals=True)
+        rospy.init_node('gaussian_process_' + TEAM_NAME, anonymous=True, disable_signals=True)
         # env reset with world file
         self.env = gym.make('RCCar-v0')
         self.env.seed(1)
@@ -53,24 +50,33 @@ class Agent:
         self.track_list = self.env.track_list
         
         self.time_limit = 150.0
-        
-        ########################
-        # PLEASE READ COMMENTS #
-        ########################
+
+        #############################
+        #############################
+        # ** load and train if 1 ** #
+        self.load_and_train = 0
+        # ************************* #
+        #############################
+        #############################
+
+
         """
-        Set some class variables and action parameters.
-        Also, initialize some functions before start if you need.
-        if you trained model with some learning-based methods like as gaussian process regression or deep learning,
-        please load the pretrained model in this part when you submit the final version!! (TRAINING IN TA'S COMPUTER IS NOT ALLOWED)
-        Also, check your git repository again on github website for correctness of your model file push history.
+        add your demonstration files with expert state-action pairs.
+        you can collect expert demonstration using pure pursuit.
+        you can define additional class member variables.
         """
-        # Please make sure that your action values are within the following range
+        #DON'T CHANGE THIS PART!
         # 1.5 <= minVel <= maxVel <= 3.0
-        # 0.0 <= maxAng <= 1.5
-        self.maxAng = 1.0
+        self.maxAng = 1.5
         self.minVel = 1.5
         self.maxVel = 3.0
+        ########################
         
+        self.demo_files = []
+
+
+        print("")
+        self.load()
 
         self.query_sub = rospy.Subscriber("/query", Query, self.callback_query)
         self.rt_pub = rospy.Publisher("/result", Result, queue_size = 1)
@@ -78,17 +84,75 @@ class Agent:
         print("completed initialization")
 
 
-    def get_action(self, obs):
-        """
-        1) input observation is the raw data from environment.
-        2) elements 0 through 1080(totally 1081) are from lidar.
-           also, the 1081th  element and 1082th element are the scaled velocity and steering angle, respectively.
-        3) calculate appropriate actions using your method.
-        """
+    def load(self):
+        # == PPO Model == #
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        alpha = 0.0003
+        n_epochs = 4
+        batch_size = 500
+        self.agent = Agent(n_actions=11, batch_size=batch_size, 
+                    alpha=alpha, n_epochs=n_epochs, 
+                    input_dims=(28,), path=team_path)
+        
+        try:
+            # ============================================================================ #
+            # self.agent.actor.load_checkpoint(self.agent.model_path+"actor_torch_ppo_final_1")
+            # self.agent.critic.load_checkpoint(self.agent.model_path+"critic_torch_ppo_final_1")
+            # self.agent.actor.load_checkpoint(self.agent.model_path+"actor_torch_ppo_final_3")
+            # self.agent.critic.load_checkpoint(self.agent.model_path+"critic_torch_ppo_final_3")
+            self.agent.actor.load_checkpoint(self.agent.model_path+"actor_torch_ppo_final_fast")
+            self.agent.critic.load_checkpoint(self.agent.model_path+"critic_torch_ppo_final_fast")
+            # ============================================================================ #
+
+            # self.agent.actor.load_checkpoint(self.agent.model_path+"actor_torch_ppo")
+            # self.agent.critic.load_checkpoint(self.agent.model_path+"critic_torch_ppo")
+            
+            
+            print("PPO model loaded")
+            if self.load_and_train == 1: self.agent.train(tracklist = ["track_10", "track_11", "track_13"], e = self.env)
+        except:
+            print("PPO model unloaded")
+            self.agent.train(tracklist = self.track_list, e = self.env)
+        # =============== #
+        return
+
+
+    def fine_control(self, fc):
+
+        if fc == 0: ang = -1.5
+        elif fc == 1: ang = -1.2
+        elif fc == 2: ang = -0.9
+        elif fc == 3: ang = -0.6
+        elif fc == 4: ang = -0.3
+        elif fc == 5: ang = 0.0
+        elif fc == 6: ang = 0.3
+        elif fc == 7: ang = 0.6
+        elif fc == 8: ang = 0.9
+        elif fc == 9: ang = 1.2
+        elif fc == 10: ang = 1.5
+
+        return ang
+
+
+    def obs_normalize(self, obs_high):   # from 1083 -> 26 + 2
+        obs_prv_action = []
+        obs_lidar = []
+        
+        for i in range(26):
+            obs_lidar.append(np.mean(obs_high[40*i:40*i+81]))
+        obs_prv_action.extend([obs_high[1082], obs_high[1081]])
+        
+        # normalize -> element sum to 1
+        obs_low_lidar = np.array(obs_lidar)/np.sum(obs_lidar)
+        obs_low_prvact = np.array(obs_prv_action)
+
+        return np.concatenate((obs_low_lidar, obs_low_prvact)), obs_low_lidar, obs_low_prvact
+
 
     def callback_query(self, data):
+
         rt = Result()
-        START_TIME = time.time()
+        START_TIME = rospy.get_time()
         is_exit = data.exit
         try:
             # if query is valid, start
@@ -96,7 +160,7 @@ class Agent:
                 return
             
             if data.world not in self.track_list:
-                END_TIME = time.time()
+                END_TIME = rospy.get_time()
                 rt.id = data.id
                 rt.trial = data.trial
                 rt.team = data.name
@@ -110,13 +174,20 @@ class Agent:
                 return
             
             print("[%s] START TO EVALUATE! MAP NAME: %s" %(data.name, data.world))
+            
+            
+            # ====== Initialization  ====== #
             obs = self.env.reset(name = data.world)
             obs = np.reshape(obs, [1,-1])
-            
-            
+            obs[obs == float('inf')] = 10
+            # ** for PPO model ** #
+            obs_norm, _, _ = self.obs_normalize(obs[0])
+            # ******************* #
+            # ============================= #
+            rsum = 0
             while True:
-                if time.time() - START_TIME > self.time_limit:
-                    END_TIME = time.time()
+                if rospy.get_time() - START_TIME > self.time_limit:
+                    END_TIME = rospy.get_time()
                     rt.id = data.id
                     rt.trial = data.trial
                     rt.team = data.name
@@ -130,14 +201,24 @@ class Agent:
                     print("EXCEED TIME LIMIT")
                     break
                 
-                act = self.get_action(obs)
-                input_steering = np.clip(act[0][0], -self.maxAng, self.maxAng)
-                input_velocity = np.clip(act[0][1], self.minVel, self.maxVel)
-                obs, _, done, logs = self.env.step([input_steering, input_velocity])
-                obs = np.reshape(obs, [1,-1])
-                
+                action, _, _ = self.agent.choose_action(obs_norm)
+                # == Controls from PPO == #
+                input_steering = self.fine_control(action)
+                input_velocity = (3.0-abs(input_steering))
+                # ======================= #
+
+                obs_, reward, done, logs = self.env.step([input_steering, input_velocity])
+                obs_ = np.reshape(obs_, [1,-1])
+                obs_[obs_ == float('inf')] = 10
+                # ** for PPO model ** #
+                obs_norm_, _, _ = self.obs_normalize(obs_[0])
+                # ******************* #
+                obs_norm = obs_norm_
+
+                rsum += reward
+
                 if done:
-                    END_TIME = time.time()
+                    END_TIME = rospy.get_time()
                     rt.id = data.id
                     rt.trial = data.trial
                     rt.team = data.name
@@ -147,6 +228,8 @@ class Agent:
                     rt.n_waypoints = 20
                     rt.success = True if logs['info'] == 3 else False
                     rt.fail_type = ""
+                    print("Time : "+str(rt.elapsed_time))
+                    print("total reward : "+str(rsum))
                     print(logs)
                     if logs['info'] == 1:
                         rt.fail_type = "Collision"
@@ -158,7 +241,7 @@ class Agent:
         
         except Exception as e:
             print(e)
-            END_TIME = time.time()
+            END_TIME = rospy.get_time()
             rt.id = data.id
             rt.trial = data.trial
             rt.team = data.name
@@ -178,6 +261,6 @@ class Agent:
 if __name__ == '__main__':
     with open(yaml_file) as file:
         args = yaml.load(file)
-    Agent(args)
+    RunProject_3(args)
     rospy.spin()
 

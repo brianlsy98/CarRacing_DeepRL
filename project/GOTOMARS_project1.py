@@ -8,7 +8,6 @@ import rospy
 
 ######################################## PLEASE CHANGE TEAM NAME ########################################
 TEAM_NAME = "GOTOMARS"
-# CODE by Sungyoung Lee 
 ######################################## PLEASE CHANGE TEAM NAME ########################################
 project_path = rospkg.RosPack().get_path("sim2real")
 yaml_file = project_path + "/config/eval1.yaml"
@@ -53,19 +52,19 @@ class PurePursuit:
         self.sum_err = 0.0
         self.dt = 0.1
         ##### implement for best ride #####
-<<<<<<< HEAD
-        self.min_vel = 0.0
-        self.max_vel = 5.5
-        self.Kp = 2.4
+##<<<<<<< HEAD
+        self.min_vel = 1.5
+        self.max_vel = 3.0
+        self.Kp = 3.0
         self.Ki = 0.001
         self.Kd = 1.1
-=======
-        self.min_vel =8.0
-        self.max_vel = 12.5
-        self.Kp = 2.0
-        self.Ki = 0.00008
-        self.Kd = 1.0
->>>>>>> 616b615889f49ca0936409c52cb508bf2d18d3b4
+##=======
+      #  self.min_vel =8.0
+     #   self.max_vel = 12.5
+      #  self.Kp = 2.0
+      #  self.Ki = 0.00008
+      #  self.Kd = 1.0
+##>>>>>>> 616b615889f49ca0936409c52cb508bf2d18d3b4
         ###################################
         ### For project 2 ###
         self.expert_data = {"state":[], "action":[], "reward":[]}
@@ -160,18 +159,24 @@ class PurePursuit:
                 self.sum_err += self.cur_err
 
                 # 3) 4) action change
+		#### PID #################################
                 input_steering = self.Kp*self.cur_err + self.Ki*self.dt*self.sum_err + self.Kd*(self.cur_err-self.prv_err)/self.dt
-                # if input_steering > 1.5: input_steering = 1.5
-                # elif input_steering < -1.5: input_steering = -1.5
+		#####################################
+                if input_steering > 1.5: 
+			input_steering = 1.5
+                elif input_steering < -1.5: 
+			input_steering = -1.5
                 input_vel = self.min_vel + (self.max_vel - self.min_vel)*np.exp(-abs(input_steering))
                 a = [input_steering, input_vel]
                 prv_pos = cur_pos
 
                 ### For project 2 ###
-                s, r, done, logs = self.env.step(a)
-                self.expert_data["state"].append(s)
-                self.expert_data["action"].append(a)
-                self.expert_data["reward"].append(r)
+      		s,r,done,logs=self.env.step(a)
+		print(s.size)
+		print(r.size)
+		self.expert_data["state"].append(s)
+		self.expert_data["action"].append(a)
+		self.expert_data["reward"].append(r)
                 #####################
 
                 ######################################## YOU CAN ONLY CHANGE THIS PART ########################################
@@ -197,6 +202,8 @@ class PurePursuit:
                     ### For project 2 ###
                     # flattening from dict to array
                     element = []
+		    print(self.expert_data["state"][0])
+		    print(len(self.expert_data["state"]))
                     for i in range(len(self.expert_data["state"])):
                         temp = []
                         for j in range(len(self.expert_data["state"][i])):
@@ -207,7 +214,11 @@ class PurePursuit:
                         element.append(temp)
                     e = np.array(element)
                     # save data
-                    np.savetxt(project_path+'/project/IS_GOTOMARS/project/'+'expert_data_'+rt.world+'_'+str(self.min_vel)+'&'+str(self.max_vel)+'.txt', e)
+                  
+
+
+		    np.savetxt(project_path+'/project/IS_GOTOMARS/project/'+'map2_5', e)
+		    #np.savetxt(project_path+'/project/IS_GOTOMARS/project/'+'expert_data_'+rt.world+'_'+str(self.min_vel)+'&'+str(self.max_vel)+'.txt', e)
                     print("saved")
                     #####################
 
@@ -222,6 +233,7 @@ class PurePursuit:
             rt.waypoints = 0
             rt.n_waypoints = 20
             rt.success = False
+
             rt.fail_type = "Script Error"
             self.rt_pub.publish(rt)
 

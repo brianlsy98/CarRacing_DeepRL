@@ -1,2 +1,0 @@
-model_checkpoint_path: "PPO_critic_weights"
-all_model_checkpoint_paths: "PPO_critic_weights"
